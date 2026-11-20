@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llmsentinel.dev/schemas/policy-v1.json",
+  "title": "LLMSentinel Policy v1",
+  "type": "object",
+  "required": ["version", "limits", "layers", "tools", "output"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "revision": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "limits": {
+      "type": "object",
+      "required": ["max_request_bytes", "max_input_chars", "requests_per_minute"],
+      "properties": {
+        "max_request_bytes": { "type": "integer", "minimum": 1, "maximum": 16777216 },
+        "max_input_chars": { "type": "integer", "minimum": 1, "maximum": 16777216 },
+        "requests_per_minute": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "require_shared_rate_limit": { "type": "boolean" },
+        "upstream_timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 600 },
+        "max_upstream_response_bytes": { "type": "integer", "minimum": 1, "maximum": 16777216 },
+        "circuit_breaker_failures": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "circuit_breaker_reset_seconds": { "type": "number", "minimum": 0.1, "maximum": 300 }
+      },
+      "additionalProperties": true
+    },
+    "layers": {
+      "type": "object",
+      "required": ["l1", "l2", "l3", "l4"],
+      "properties": {
+        "l1": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "block_opaque_entropy_bits_per_char": { "type": "number", "exclusiveMinimum": 0, "maximum": 8 },
+            "decode_base64": { "type": "boolean" },
+            "decode_hex": { "type": "boolean" },
+            "normalize_unicode": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "l2": { "type": "object", "properties": { "enabled": { "type": "boolean" }, "mode": { "const": "deterministic_heuristics" }, "block_patterns": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 256 } } }, "additionalProperties": true },
+        "l3": { "type": "object", "properties": { "enabled": { "const": true }, "require_tenant_from_verified_jwt": { "const": true }, "reject_path_traversal": { "const": true }, "validate_json_schema": { "const": true } }, "additionalProperties": true },
+        "l4": { "type": "object", "properties": { "enabled": { "type": "boolean" } }, "additionalProperties": false }
+      },
+      "additionalProperties": true
+    },
+    "tools": {
+      "type": "object",
+      "required": ["allow"],
+      "properties": {
+        "allow": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "tenant_bound": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "roles": { "type": "object", "additionalProperties": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } } },
+        "critical": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "schemas": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "required": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+              "properties": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": ["type"],
+                  "properties": { "type": { "enum": ["string", "integer", "number", "boolean", "object", "array", "null"] } },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "canary": { "type": "string" },
+        "redact": { "type": "array", "uniqueItems": true, "items": { "enum": ["aws_access_key", "openai_key", "private_key", "email"] } }
+      },
+      "additionalProperties": true
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "require_auth": { "type": "boolean" },
+        "mode": { "enum": ["hs256", "oidc"] },
+        "secret_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "audience": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "issuer_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "audience_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "jwks_url_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "tenant_claim": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "role_claim": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "algorithms": { "type": "array", "items": { "enum": ["RS256", "ES256", "EdDSA"] }, "minItems": 1 },
+        "role_mappings": { "type": "object", "additionalProperties": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } } }
+      },
+      "additionalProperties": true
+    },
+    "approval": { "type": "object", "properties": { "secret_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }, "require_shared_replay": { "type": "boolean" } }, "additionalProperties": true },
+    "integrity": {
+      "type": "object",
+      "properties": {
+        "require_signature": { "type": "boolean" },
+        "algorithm": { "enum": ["HMAC-SHA256", "Ed25519"] },
+        "signature_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "verification_key_env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+      },
+      "additionalProperties": false
+    },
+    "integrations": {
+      "type": "object",
+      "properties": {
+        "mcp": { "type": "object", "properties": { "protocol_version": { "type": "string", "minLength": 1, "maxLength": 64 } }, "additionalProperties": false }
+      },
+      "additionalProperties": true
+    },
+    "telemetry": { "type": "object", "properties": { "roles": { "type": "array", "items": { "type": "string", "minLength": 1 } } }, "additionalProperties": true }
+  },
+  "additionalProperties": true
+}
