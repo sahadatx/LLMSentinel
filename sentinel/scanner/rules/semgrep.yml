@@ -1,0 +1,40 @@
+rules:
+  - id: llmsentinel.python-untrusted-eval
+    message: Untrusted input reaches a dynamic Python execution sink.
+    severity: ERROR
+    languages: [python]
+    mode: taint
+    pattern-sources:
+      - pattern: input(...)
+      - pattern: $REQUEST.args.get(...)
+      - pattern: $REQUEST.query_params.get(...)
+      - pattern: $REQUEST.json(...)
+    pattern-sinks:
+      - pattern: eval(...)
+      - pattern: exec(...)
+      - pattern: os.system(...)
+      - pattern: subprocess.run(...)
+      - pattern: subprocess.Popen(...)
+  - id: llmsentinel.langchain-untrusted-system-message
+    message: Untrusted input is used to construct a system-role message.
+    severity: WARNING
+    languages: [python]
+    mode: taint
+    pattern-sources:
+      - pattern: input(...)
+      - pattern: $REQUEST.args.get(...)
+      - pattern: $REQUEST.query_params.get(...)
+    pattern-sinks:
+      - pattern: SystemMessage(content=$VALUE, ...)
+      - pattern: '{"role": "system", "content": $VALUE}'
+  - id: llmsentinel.mcp-untrusted-shell
+    message: Untrusted tool input reaches a shell invocation.
+    severity: ERROR
+    languages: [python]
+    mode: taint
+    pattern-sources:
+      - pattern: $TOOL_ARGS[...]
+      - pattern: input(...)
+    pattern-sinks:
+      - pattern: subprocess.run(..., shell=True, ...)
+      - pattern: subprocess.Popen(..., shell=True, ...)

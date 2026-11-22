@@ -1,0 +1,21 @@
+rules:
+  - id: python.dynamic-eval
+    message: Untrusted data flows into eval or exec.
+    severity: ERROR
+    cwe: CWE-95
+  - id: python.subprocess
+    message: Untrusted data flows into a subprocess API.
+    severity: ERROR
+    cwe: CWE-78
+  - id: python.unsafe-deserialization
+    message: Untrusted data flows into pickle deserialization.
+    severity: ERROR
+    cwe: CWE-502
+  - id: llm.untrusted-system-prompt
+    message: Untrusted data flows into a system prompt constructor.
+    severity: WARNING
+    cwe: CWE-74
+  - id: llm.prompt-construction
+    message: Untrusted data flows into a prompt template constructor.
+    severity: WARNING
+    cwe: CWE-74
