@@ -1,0 +1,68 @@
+{
+  "target": "http://127.0.0.1:8765",
+  "policy": {
+    "name": "default-strict",
+    "version": 1,
+    "revision": "2026.11.0",
+    "sha256": "ad992688d6e0f87ff14941ffbbf1536ff6c0b3b9757b6a1181453cd4cb76b976"
+  },
+  "upstream_status": "local_mock",
+  "requests_requested": 100,
+  "requests_completed": 100,
+  "successful_responses": 100,
+  "status_counts": {
+    "200": 100
+  },
+  "concurrency": 10,
+  "elapsed_seconds": 0.365,
+  "throughput_rps": 274.336,
+  "client_round_trip_ms": {
+    "p50": 34.661,
+    "p95": 63.542,
+    "p99": 82.86,
+    "mean": 33.877
+  },
+  "gateway_reported_ms": {
+    "p50": 2.973,
+    "p95": 4.693,
+    "p99": 4.945,
+    "mean": 2.974
+  },
+  "gateway_runtime_metrics": {
+    "requests": 110,
+    "blocked": 0,
+    "policy_denials": 0,
+    "rate_limited": 0,
+    "redactions": 0,
+    "tool_calls": 0,
+    "upstream_errors": 0,
+    "circuit_open": 0,
+    "latency_ms": {
+      "p50": 2.731,
+      "p95": 4.693,
+      "p99": 4.945
+    },
+    "gateway_overhead_ms": {
+      "p50": 2.731,
+      "p95": 4.693,
+      "p99": 4.945
+    },
+    "upstream_ms": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "tool_policy_ms": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "window": 110,
+    "stage_windows": {
+      "gateway_overhead": 110,
+      "upstream": 0,
+      "tool_policy": 0
+    }
+  },
+  "notes": "Observed gateway run; failed/rate-limited requests are excluded from gateway-reported response percentiles. Results are environment-specific and are not an SLA unless the traffic profile and acceptance criteria are published."
+}

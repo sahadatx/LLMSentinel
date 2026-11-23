@@ -1,0 +1,23 @@
+{
+  "dataset": "dataset_v1.jsonl",
+  "dataset_sha256": "7d5512040b7f2d59bc27a995d6a501f50c279029024771caf8a7c4c70c99bd7f",
+  "policy_sha256": "f1120f2dcd60cc6a741aadb13ce6262fbe9fb63ea70264c8f2f898213a80a67e",
+  "samples": 220,
+  "benign": 110,
+  "attacks": 110,
+  "true_positive_rate": 1.0,
+  "false_positive_rate": 0.0,
+  "latency_ms": {
+    "p50": 0.03,
+    "p95": 0.0571,
+    "p99": 0.0693,
+    "mean": 0.0346
+  },
+  "environment": {
+    "python": "3.13.14",
+    "platform": "Linux-7.0.12+kali-amd64-x86_64-with-glibc2.43",
+    "machine": "x86_64",
+    "processor": "not reported"
+  },
+  "notes": "Single-process synthetic corpus run; not a production load test or SLA claim."
+}
