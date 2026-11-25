@@ -1,0 +1,82 @@
+services:
+  gateway:
+    image: llmsentinel/gateway:local
+    build: .
+    command: ["sentinel", "gateway", "--host", "0.0.0.0", "--policy", "${SENTINEL_POLICY:-/app/policies/default-strict.yaml}", "--allow-unauthenticated-network"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      SENTINEL_POLICY: ${SENTINEL_POLICY:-/app/policies/default-strict.yaml}
+      SENTINEL_AUDIT_PATH: /app/.sentinel/audit.jsonl
+      SENTINEL_JWT_SECRET: ${SENTINEL_JWT_SECRET:-}
+      SENTINEL_APPROVAL_SECRET: ${SENTINEL_APPROVAL_SECRET:-}
+      SENTINEL_APPROVAL_REPLAY_DB: ${SENTINEL_APPROVAL_REPLAY_DB:-/app/.sentinel/approval-replays.sqlite3}
+      SENTINEL_APPROVAL_REPLAY_REDIS_URL: ${SENTINEL_APPROVAL_REPLAY_REDIS_URL:-}
+      SENTINEL_RATE_LIMIT_REDIS_URL: ${SENTINEL_RATE_LIMIT_REDIS_URL:-}
+      SENTINEL_POLICY_SIGNING_KEY: ${SENTINEL_POLICY_SIGNING_KEY:-}
+      SENTINEL_POLICY_VERIFY_KEY: ${SENTINEL_POLICY_VERIFY_KEY:-}
+      SENTINEL_OIDC_JWKS_URL: ${SENTINEL_OIDC_JWKS_URL:-}
+      SENTINEL_OIDC_ISSUER: ${SENTINEL_OIDC_ISSUER:-}
+      SENTINEL_OIDC_AUDIENCE: ${SENTINEL_OIDC_AUDIENCE:-}
+      SENTINEL_UPSTREAM_URL: ${SENTINEL_UPSTREAM_URL:-}
+      SENTINEL_UPSTREAM_API_KEY: ${SENTINEL_UPSTREAM_API_KEY:-}
+      SENTINEL_CHROMA_URL: ${SENTINEL_CHROMA_URL:-}
+      SENTINEL_CHROMA_TOKEN: ${SENTINEL_CHROMA_TOKEN:-}
+      SENTINEL_CHROMA_TENANT: ${SENTINEL_CHROMA_TENANT:-default_tenant}
+      SENTINEL_CHROMA_DATABASE: ${SENTINEL_CHROMA_DATABASE:-default_database}
+      SENTINEL_CHROMA_COLLECTION: ${SENTINEL_CHROMA_COLLECTION:-llmsentinel-documents}
+      SENTINEL_MCP_TOOL_ENDPOINTS: ${SENTINEL_MCP_TOOL_ENDPOINTS:-}
+      SENTINEL_MCP_TOOL_TOKENS: ${SENTINEL_MCP_TOOL_TOKENS:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-llmsentinel-gateway}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      SENTINEL_CORS_ORIGINS: ${SENTINEL_CORS_ORIGINS:-}
+      SENTINEL_CONTROL_DB: ${SENTINEL_CONTROL_DB:-/app/.sentinel/control-plane.sqlite3}
+      SENTINEL_EVAL_DATASET_PATH: ${SENTINEL_EVAL_DATASET_PATH:-/app/benchmarks/dataset_v1.jsonl}
+      SENTINEL_SIEM_WEBHOOK_URL: ${SENTINEL_SIEM_WEBHOOK_URL:-}
+      SENTINEL_SIEM_WEBHOOK_TOKEN: ${SENTINEL_SIEM_WEBHOOK_TOKEN:-}
+      SENTINEL_SIEM_OUTBOX_RETENTION_DAYS: ${SENTINEL_SIEM_OUTBOX_RETENTION_DAYS:-30}
+    volumes:
+      - sentinel-audit:/app/.sentinel
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [sentinel]
+
+  sandbox:
+    image: llmsentinel/sandbox:local
+    build: .
+    command: ["python", "-m", "uvicorn", "sentinel.sandbox.app:app", "--host", "0.0.0.0", "--port", "8001"]
+    expose: ["8001"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [sentinel]
+    profiles: [demo]
+
+  dashboard:
+    image: llmsentinel/dashboard:local
+    build: ./dashboard
+    ports:
+      - "127.0.0.1:5173:8080"
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      SENTINEL_API_URL: ${SENTINEL_API_URL:-http://localhost:8000}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks: [sentinel]
+
+networks:
+  sentinel:
+    driver: bridge
+
+volumes:
+  sentinel-audit:

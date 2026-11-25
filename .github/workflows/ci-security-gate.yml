@@ -1,0 +1,169 @@
+name: CI security gate
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-quality:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install project and development tools
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Check formatting and lint rules
+        run: ruff check .
+      - name: Check static types
+        run: mypy sentinel benchmarks
+      - name: Run security-control regression suite
+        run: pytest -q
+      - name: Verify deterministic policy invariants
+        run: sentinel verify
+
+  dashboard-and-containers:
+    name: Dashboard and container build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.12.0"
+          package-manager-cache: false
+      - name: Build dashboard
+        working-directory: dashboard
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build hardened runtime images
+        run: docker compose build --pull
+      - name: Scan gateway image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: llmsentinel/gateway:local
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.76.2
+      - name: Scan dashboard image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: llmsentinel/dashboard:local
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.76.2
+          skip-setup-trivy: true
+
+  sarif-scan:
+    name: Static scan and SARIF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install scanner
+        run: python -m pip install --disable-pip-version-check .
+      - name: Install pinned Semgrep in an isolated environment
+        run: |
+          python -m venv .semgrep-venv
+          .semgrep-venv/bin/python -m pip install --disable-pip-version-check 'semgrep==1.179.0'
+      - name: Create AST scanner SARIF report
+        run: |
+          mkdir -p results
+          sentinel scan sentinel --format sarif --output results/llmsentinel-ast.sarif
+      - name: Create Semgrep SARIF report
+        run: .semgrep-venv/bin/semgrep scan --config sentinel/scanner/rules/semgrep.yml --sarif --output results/llmsentinel-semgrep.sarif sentinel
+      - name: Scan dependencies, secrets, and IaC
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: results/llmsentinel-trivy.sarif
+          exit-code: "1"
+          version: v0.76.2
+      - name: Upload AST SARIF to Code Scanning
+        if: always() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && hashFiles('results/llmsentinel-ast.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results/llmsentinel-ast.sarif
+          category: llmsentinel-ast-scan
+      - name: Upload Semgrep SARIF to Code Scanning
+        if: always() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && hashFiles('results/llmsentinel-semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results/llmsentinel-semgrep.sarif
+          category: llmsentinel-semgrep
+      - name: Upload Trivy filesystem SARIF to Code Scanning
+        if: always() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && hashFiles('results/llmsentinel-trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results/llmsentinel-trivy.sarif
+          category: llmsentinel-trivy-filesystem
+      - name: Keep SARIF report for review
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: llmsentinel-sarif
+          path: results/*.sarif
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release-artifacts:
+    name: Publish verified release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [python-quality, dashboard-and-containers, sarif-scan]
+    uses: ./.github/workflows/release-artifacts.yml
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
